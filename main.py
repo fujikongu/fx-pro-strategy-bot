@@ -44,11 +44,7 @@ def load_passwords():
     }
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
-        content_json = res.json()
-        if isinstance(content_json, dict) and "content" in content_json:
-            content = content_json["content"]
-            decoded = base64.b64decode(content).decode("utf-8")
-            return json.loads(decoded)
+        return json.loads(res.text)  # 🔄 JSON文字列をロードするだけでOK
     return []
 
 # GitHubへpasswords.jsonを更新
