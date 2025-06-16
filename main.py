@@ -9,9 +9,9 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickRepl
 
 app = Flask(__name__)
 
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -26,18 +26,15 @@ def load_passwords():
 def verify_password(user_id, input_pw):
     passwords = load_passwords()
     today = datetime.date.today()
-
     for pw in passwords:
         if pw["password"] == input_pw:
             expire = datetime.datetime.strptime(pw["issued"], "%Y-%m-%d").date() + datetime.timedelta(days=30)
             if not pw["used"] and today <= expire:
+                user_state[user_id] = {"authenticated": True, "step": "awaiting_pair"}
                 pw["used"] = True
                 with open("passwords.json", "w", encoding="utf-8") as f:
                     json.dump(passwords, f, ensure_ascii=False, indent=2)
-                user_state[user_id] = {"authenticated": True, "step": "awaiting_pair"}
                 return True
-            else:
-                return False
     return False
 
 def create_currency_quick_reply():
@@ -56,13 +53,11 @@ def generate_strategy(pair):
 　A：○○ならロング
 　B：○○ならノートレード
 """
-
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7
     )
-
     return response["choices"][0]["message"]["content"]
 
 @app.route("/callback", methods=["POST"])
@@ -90,10 +85,9 @@ def handle_message(event):
 
     if message in ["USDJPY", "EURUSD", "GBPJPY", "AUDJPY", "EURJPY"]:
         strategy = generate_strategy(message)
-        reply = TextSendMessage(text=f"📊 {message}の戦略
-
-{strategy}")
+        reply = TextSendMessage(text=f"📊 {message}の戦略")
         line_bot_api.reply_message(event.reply_token, reply)
+        line_bot_api.push_message(user_id, TextSendMessage(text=strategy))
         return
 
     reply = TextSendMessage(text="通貨ペアを選んでください。", quick_reply=create_currency_quick_reply())
