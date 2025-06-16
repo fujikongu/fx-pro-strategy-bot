@@ -1,4 +1,3 @@
-
 import os
 import json
 import random
@@ -6,28 +5,15 @@ import datetime
 from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
-
 PASSWORD_FILE = "passwords.json"
 
-# パスワード生成関数
+# HTMLテンプレートを外部ファイルから読み込み
+with open("issue_password_template.html", encoding="utf-8") as f:
+    HTML_FORM = f.read()
+
 def generate_password():
     return f"mem{random.randint(1, 9999):04d}"
 
-# HTMLフォームテンプレート
-HTML_FORM = """
-<!doctype html>
-<title>パスワード発行</title>
-<h2>ランダムパスワード発行フォーム</h2>
-<form method="post">
-  <button type="submit">発行する</button>
-</form>
-{% if password %}
-  <p>✅ あなたのパスワード：<strong>{{ password }}</strong></p>
-  <p>※このパスワードは1ヶ月間有効・1回限り使用可能です。</p>
-{% endif %}
-"""
-
-# パスワード保存関数
 def save_password(password):
     today = datetime.date.today().isoformat()
     if os.path.exists(PASSWORD_FILE):
@@ -35,17 +21,10 @@ def save_password(password):
             data = json.load(f)
     else:
         data = []
-
-    data.append({
-        "password": password,
-        "used": False,
-        "issued": today
-    })
-
+    data.append({"password": password, "used": False, "issued": today})
     with open(PASSWORD_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-# ルート：フォーム表示と発行処理
 @app.route("/issue-password", methods=["GET", "POST"])
 def issue_password():
     password = None
