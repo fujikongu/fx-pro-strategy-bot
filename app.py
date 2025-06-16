@@ -76,10 +76,10 @@ def issue_password():
 
     html = '''
     <html><head><meta charset="UTF-8"></head>
-    <body style="font-size: 300%;">
+    <body style="font-size: 200%;">
         <h2>🔐 ランダムパスワード発行フォーム</h2>
         <form method="post">
-            <button type="submit" style="font-size: 300%;">🪙 発行する</button>
+            <button type="submit" style="font-size: 200%;">🪙 発行する</button>
         </form>
         {% if password %}
             <p>✅ あなたのパスワード：<b>{{ password }}</b></p>
