@@ -40,30 +40,35 @@ def load_passwords():
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3.raw"
+        "Accept": "application/vnd.github.v3+json"
     }
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
-        return json.loads(res.text)  # 🔄 JSON文字列をロードするだけでOK
+        content_json = res.json()
+        if isinstance(content_json, dict) and "content" in content_json:
+            content = content_json["content"]
+            decoded = base64.b64decode(content).decode("utf-8")
+            return json.loads(decoded)
     return []
 
-# GitHubへpasswords.jsonを更新
+# GitHubのpasswords.jsonを更新する
 def update_passwords(passwords):
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
-    res = requests.get(url, headers=headers)
-    if res.status_code != 200:
+    get_res = requests.get(url, headers=headers)
+    if get_res.status_code != 200:
         return False
+    sha = get_res.json()["sha"]
 
-    sha = res.json()["sha"]
-    encoded = base64.b64encode(json.dumps(passwords, ensure_ascii=False, indent=2).encode()).decode()
+    content_str = json.dumps(passwords, ensure_ascii=False, indent=2)
+    content_b64 = base64.b64encode(content_str.encode()).decode()
 
     data = {
-        "message": "Mark password as used",
-        "content": encoded,
+        "message": "Update password usage",
+        "content": content_b64,
         "sha": sha
     }
     put_res = requests.put(url, headers=headers, json=data)
@@ -97,11 +102,11 @@ def handle_message(event):
                     reply_text = "❌ このパスワードはすでに使用されています。"
                 else:
                     pw["used"] = True
-                    update_passwords(passwords)  # ✅ GitHubに反映
                     user_state[user_id] = {
                         "authenticated": True,
                         "step": "await_currency_pair"
                     }
+                    update_passwords(passwords)
                     reply_text = "✅ 認証成功！分析したい通貨ペアを選んでください："
                 break
         else:
@@ -119,7 +124,7 @@ def handle_message(event):
             strategy = generate_strategy(message_text)
             reply = TextSendMessage(text=f"📊 {message_text}の戦略\n\n{strategy}")
             line_bot_api.reply_message(event.reply_token, reply)
-            user_state.pop(user_id, None)
+            user_state.pop(user_id, None)  # セッション終了
         else:
             line_bot_api.reply_message(
                 event.reply_token,
