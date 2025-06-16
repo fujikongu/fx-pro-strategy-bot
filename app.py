@@ -24,6 +24,14 @@ def generate_password():
 def get_expiration_date():
     return (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 
+# パスワード有効性チェック（発行日＋30日以内）
+def is_valid_password(entry):
+    try:
+        issued_date = datetime.strptime(entry.get("issued", ""), "%Y-%m-%d")
+        return datetime.now() <= issued_date + timedelta(days=30)
+    except:
+        return False
+
 # GitHubからpasswords.jsonを取得
 def fetch_passwords():
     url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/main/{FILE_PATH}"
