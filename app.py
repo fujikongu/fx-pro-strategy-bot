@@ -75,7 +75,7 @@ def issue_password():
             <body style="text-align:center; padding-top:50px;">
                 <div style="font-size: 36px; font-weight: bold;">✅ あなたのパスワード:</div>
                 <div style="font-size: 72px; font-weight: bold; color: #007BFF;">{new_pass}</div>
-                <div style="font-size: 24px; margin-top:20px;">
+                <div style="font-size: 40px; margin-top:20px;">
                     📅 このパスワードは1ヶ月間有効・何度でも使用可能です。
                 </div>
             </body>
