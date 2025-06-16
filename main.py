@@ -65,13 +65,16 @@ def callback():
 def handle_message(event):
     user_id = event.source.user_id
     message_text = event.message.text.strip()
-
     passwords = load_passwords()
 
     # 認証未完了
     if user_id not in user_state:
         for pw in passwords:
             if pw["password"] == message_text:
+                issued_date = datetime.datetime.strptime(pw["issued"], "%Y-%m-%d")
+                if datetime.datetime.now() > issued_date + datetime.timedelta(days=30):
+                    reply_text = "❌ 無効なパスワード、または期限切れです。"
+                    break
                 if pw["used"]:
                     reply_text = "❌ このパスワードはすでに使用されています。"
                 else:
