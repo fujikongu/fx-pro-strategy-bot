@@ -64,7 +64,6 @@ def issue_password():
     new_pass = generate_password()
     new_entry = {
         "password": new_pass,
-        "used": False,
         "issued": datetime.now().strftime("%Y-%m-%d")
     }
     passwords.append(new_entry)
