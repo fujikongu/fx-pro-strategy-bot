@@ -51,6 +51,28 @@ def load_passwords():
             return json.loads(decoded)
     return []
 
+# GitHubへpasswords.jsonを更新
+def update_passwords(passwords):
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    res = requests.get(url, headers=headers)
+    if res.status_code != 200:
+        return False
+
+    sha = res.json()["sha"]
+    encoded = base64.b64encode(json.dumps(passwords, ensure_ascii=False, indent=2).encode()).decode()
+
+    data = {
+        "message": "Mark password as used",
+        "content": encoded,
+        "sha": sha
+    }
+    put_res = requests.put(url, headers=headers, json=data)
+    return put_res.status_code == 200
+
 @app.route("/callback", methods=["POST"])
 def callback():
     signature = request.headers["X-Line-Signature"]
@@ -79,6 +101,7 @@ def handle_message(event):
                     reply_text = "❌ このパスワードはすでに使用されています。"
                 else:
                     pw["used"] = True
+                    update_passwords(passwords)  # ✅ GitHubに反映
                     user_state[user_id] = {
                         "authenticated": True,
                         "step": "await_currency_pair"
@@ -100,7 +123,7 @@ def handle_message(event):
             strategy = generate_strategy(message_text)
             reply = TextSendMessage(text=f"📊 {message_text}の戦略\n\n{strategy}")
             line_bot_api.reply_message(event.reply_token, reply)
-            user_state.pop(user_id, None)  # セッション終了
+            user_state.pop(user_id, None)
         else:
             line_bot_api.reply_message(
                 event.reply_token,
