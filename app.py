@@ -1,97 +1,81 @@
 
 import os
 import json
+import base64
+import datetime
 import random
 import string
-import base64
 import requests
-from flask import Flask, request
-from datetime import datetime, timedelta
+from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
 
-# GitHub設定
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-REPO_OWNER = "fujikongu"
-REPO_NAME = "fx-pro-strategy-bot"
+REPO_NAME = os.getenv("REPO_NAME")  # 例: fujikongu/fx-pro-strategy-bot
 FILE_PATH = "passwords.json"
 
-# パスワード生成
-def generate_password():
-    return "mem" + ''.join(random.choices(string.digits, k=4))
-
-# 有効期限の設定（1ヶ月）
-def get_expiration_date():
-    return (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-
-# パスワード有効性チェック（発行日＋30日以内）
-def is_valid_password(entry):
-    try:
-        issued_date = datetime.strptime(entry.get("issued", ""), "%Y-%m-%d")
-        return datetime.now() <= issued_date + timedelta(days=30)
-    except:
-        return False
-
-# GitHubからpasswords.jsonを取得
-def fetch_passwords():
-    url = f"https://raw.githubusercontent.com/{REPO_OWNER}/{REPO_NAME}/main/{FILE_PATH}"
-    res = requests.get(url)
-    if res.status_code == 200:
-        return json.loads(res.text)
-    return []
-
-# GitHubへpasswords.jsonをアップロード
-def update_passwords(passwords):
-    get_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}"
+# GitHubからpasswords.jsonを読み込み
+def load_passwords():
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
     headers = {
         "Authorization": f"token {GITHUB_TOKEN}",
         "Accept": "application/vnd.github.v3+json"
     }
-    get_res = requests.get(get_url, headers=headers)
-    if get_res.status_code != 200:
-        return False
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200:
+        content_json = res.json()
+        if isinstance(content_json, dict) and "content" in content_json:
+            content = content_json["content"]
+            decoded = base64.b64decode(content).decode("utf-8")
+            return json.loads(decoded), content_json.get("sha", "")
+    return [], ""
 
-    sha = get_res.json()["sha"]
-    encoded = base64.b64encode(json.dumps(passwords, ensure_ascii=False, indent=2).encode()).decode()
-
+# GitHubのpasswords.jsonを更新
+def update_passwords(passwords, sha):
+    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    content_str = json.dumps(passwords, ensure_ascii=False, indent=2)
+    content_b64 = base64.b64encode(content_str.encode()).decode()
     data = {
-        "message": "Update passwords.json",
-        "content": encoded,
+        "message": "Add new password",
+        "content": content_b64,
         "sha": sha
     }
-    put_res = requests.put(get_url, headers=headers, json=data)
-    return put_res.status_code == 200
+    res = requests.put(url, headers=headers, json=data)
+    return res.status_code == 200
 
-@app.route("/issue-password", methods=["GET"])
+# ランダムパス生成
+def generate_random_password():
+    return "mem" + ''.join(random.choices(string.digits, k=4))
+
+# HTMLフォーム表示・処理
+@app.route("/issue-password", methods=["GET", "POST"])
 def issue_password():
-    try:
-        passwords = fetch_passwords()
-    except Exception:
-        return "エラーが発生しました: GitHubファイル取得失敗"
+    if request.method == "POST":
+        passwords, sha = load_passwords()
+        new_pass = generate_random_password()
+        new_password = {
+            "password": new_pass,
+            "issued": datetime.datetime.now().strftime("%Y-%m-%d")
+        }
+        passwords.append(new_password)
+        success = update_passwords(passwords, sha)
+        if success:
+            return f"<h2>✅ パスワード発行完了：{new_pass}</h2>"
+        else:
+            return "<h2>❌ 更新に失敗しました。</h2>", 500
 
-    new_pass = generate_password()
-    new_entry = {
-        "password": new_pass,
-        "used": False,
-        "issued": datetime.now().strftime("%Y-%m-%d")
-    }
-    passwords.append(new_entry)
-
-    if update_passwords(passwords):
-        return f"""
-        <html>
-            <body style="text-align:center; padding-top:50px;">
-                <div style="font-size: 36px; font-weight: bold;">✅ あなたのパスワード:</div>
-                <div style="font-size: 72px; font-weight: bold; color: #007BFF;">{new_pass}</div>
-                <div style="font-size: 40px; margin-top:20px;">
-                    📅 このパスワードは1ヶ月間有効・何度でも使用可能です。
-                </div>
-            </body>
-        </html>
-        """
-    else:
-        return "❌ GitHubへの保存に失敗しました。"
+    # GET表示用HTML
+    return render_template_string("""
+        <h2>パスワード発行</h2>
+        <form method="post">
+            <button type="submit">発行する</button>
+        </form>
+    """)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
