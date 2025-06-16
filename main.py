@@ -36,11 +36,11 @@ def load_passwords():
     }
     res = requests.get(url, headers=headers)
     if res.status_code == 200:
-        content_json = res.json()
-        if isinstance(content_json, dict) and "content" in content_json:
-            content = content_json["content"]
-            decoded = base64.b64decode(content).decode("utf-8")
-            return json.loads(decoded)
+        # GitHub APIが直接JSON配列を返す（v3.rawを指定しているため）
+        try:
+            return res.json()
+        except:
+            return []
     return []
 
 # パスワード認証
