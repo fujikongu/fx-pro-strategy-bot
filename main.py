@@ -1,4 +1,3 @@
-
 import os
 import json
 import datetime
@@ -10,7 +9,6 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickRepl
 
 app = Flask(__name__)
 
-# 環境変数から取得
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -19,15 +17,12 @@ line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 openai.api_key = OPENAI_API_KEY
 
-# 認証状態を保持
 user_state = {}
 
-# パスワードファイルの読み込み
 def load_passwords():
     with open("passwords.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
-# 認証チェック
 def verify_password(user_id, input_pw):
     passwords = load_passwords()
     today = datetime.date.today()
@@ -35,20 +30,21 @@ def verify_password(user_id, input_pw):
     for pw in passwords:
         if pw["password"] == input_pw:
             expire = datetime.datetime.strptime(pw["issued"], "%Y-%m-%d").date() + datetime.timedelta(days=30)
-            if pw["used"] and today <= expire:
+            if not pw["used"] and today <= expire:
+                pw["used"] = True
+                with open("passwords.json", "w", encoding="utf-8") as f:
+                    json.dump(passwords, f, ensure_ascii=False, indent=2)
                 user_state[user_id] = {"authenticated": True, "step": "awaiting_pair"}
                 return True
             else:
                 return False
     return False
 
-# クイックリプライ作成
 def create_currency_quick_reply():
     pairs = ["USDJPY", "EURUSD", "GBPJPY", "AUDJPY", "EURJPY"]
     items = [QuickReplyButton(action=MessageAction(label=p, text=p)) for p in pairs]
     return QuickReply(items=items)
 
-# ChatGPTで戦略生成
 def generate_strategy(pair):
     prompt = f"""
 あなたはプロのFXトレーダーです。以下の形式で「{pair}」の今日の戦略を出力してください：
@@ -69,7 +65,6 @@ def generate_strategy(pair):
 
     return response["choices"][0]["message"]["content"]
 
-# LINEイベント処理
 @app.route("/callback", methods=["POST"])
 def callback():
     signature = request.headers["X-Line-Signature"]
@@ -80,13 +75,11 @@ def callback():
         abort(400)
     return "OK"
 
-# メッセージ受信時の処理
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
     message = event.message.text.strip()
 
-    # 未認証の場合：パス入力と判定
     if user_id not in user_state or not user_state[user_id].get("authenticated"):
         if verify_password(user_id, message):
             reply = TextSendMessage(text="✅ 認証成功！分析したい通貨ペアを選んでください：", quick_reply=create_currency_quick_reply())
@@ -95,17 +88,16 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, reply)
         return
 
-    # 通貨ペアの選択 → 戦略生成
     if message in ["USDJPY", "EURUSD", "GBPJPY", "AUDJPY", "EURJPY"]:
         strategy = generate_strategy(message)
-        reply = TextSendMessage(text=f"📊 {message}の戦略\n\n{strategy}")
+        reply = TextSendMessage(text=f"📊 {message}の戦略
+
+{strategy}")
         line_bot_api.reply_message(event.reply_token, reply)
         return
 
-    # それ以外のメッセージ
     reply = TextSendMessage(text="通貨ペアを選んでください。", quick_reply=create_currency_quick_reply())
     line_bot_api.reply_message(event.reply_token, reply)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # ← この行を追加
-    app.run(host="0.0.0.0", port=port)        # ← ポートとホストを明示
+    app.run()
