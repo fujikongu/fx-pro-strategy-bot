@@ -7,13 +7,16 @@ from flask import Flask, request, abort
 
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, QuickReply, QuickReplyButton, MessageAction
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage,
+    QuickReply, QuickReplyButton, MessageAction
+)
 
 from strategy_generator import generate_strategy  # 通貨戦略生成関数
 
 app = Flask(__name__)
 
-# 環境変数からLINEチャンネル情報
+# 環境変数からLINEチャンネル情報を取得
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
@@ -23,10 +26,10 @@ FILE_PATH = "passwords.json"
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# ユーザーステート
+# ユーザーステートを保持
 user_state = {}
 
-# 通貨クイックリプライ
+# クイックリプライの定義
 currency_quick_reply = QuickReply(items=[
     QuickReplyButton(action=MessageAction(label="USDJPY", text="USDJPY")),
     QuickReplyButton(action=MessageAction(label="EURUSD", text="EURUSD")),
@@ -35,7 +38,7 @@ currency_quick_reply = QuickReply(items=[
     QuickReplyButton(action=MessageAction(label="EURJPY", text="EURJPY")),
 ])
 
-# GitHubのpasswords.jsonを読み込む
+# GitHubからpasswords.jsonを読み込む
 def load_passwords():
     url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
     headers = {
@@ -51,29 +54,7 @@ def load_passwords():
             return json.loads(decoded)
     return []
 
-# GitHubのpasswords.jsonを更新する
-def update_passwords(passwords):
-    url = f"https://api.github.com/repos/{REPO_NAME}/contents/{FILE_PATH}"
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github.v3+json"
-    }
-    get_res = requests.get(url, headers=headers)
-    if get_res.status_code != 200:
-        return False
-    sha = get_res.json()["sha"]
-
-    content_str = json.dumps(passwords, ensure_ascii=False, indent=2)
-    content_b64 = base64.b64encode(content_str.encode()).decode()
-
-    data = {
-        "message": "Update password usage",
-        "content": content_b64,
-        "sha": sha
-    }
-    put_res = requests.put(url, headers=headers, json=data)
-    return put_res.status_code == 200
-
+# Webhookのエンドポイント
 @app.route("/callback", methods=["POST"])
 def callback():
     signature = request.headers["X-Line-Signature"]
@@ -84,29 +65,25 @@ def callback():
         abort(400)
     return "OK"
 
+# メッセージイベント処理
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
     message_text = event.message.text.strip()
     passwords = load_passwords()
 
-    # 認証未完了
+    # 認証未完了ユーザー
     if user_id not in user_state:
         for pw in passwords:
             if pw["password"] == message_text:
                 issued_date = datetime.datetime.strptime(pw["issued"], "%Y-%m-%d")
                 if datetime.datetime.now() > issued_date + datetime.timedelta(days=30):
                     reply_text = "❌ 無効なパスワード、または期限切れです。"
-                    break
-                if pw["used"]:
-                    reply_text = "❌ このパスワードはすでに使用されています。"
                 else:
-                    pw["used"] = True
                     user_state[user_id] = {
                         "authenticated": True,
                         "step": "await_currency_pair"
                     }
-                    update_passwords(passwords)
                     reply_text = "✅ 認証成功！分析したい通貨ペアを選んでください："
                 break
         else:
@@ -118,13 +95,13 @@ def handle_message(event):
         )
         return
 
-    # 通貨ペア選択 → 戦略出力
+    # 認証後：通貨ペア入力待ち
     if user_state.get(user_id, {}).get("step") == "await_currency_pair":
         if message_text in ["USDJPY", "EURUSD", "GBPJPY", "AUDJPY", "EURJPY"]:
             strategy = generate_strategy(message_text)
             reply = TextSendMessage(text=f"📊 {message_text}の戦略\n\n{strategy}")
             line_bot_api.reply_message(event.reply_token, reply)
-            user_state.pop(user_id, None)  # セッション終了
+            user_state.pop(user_id, None)
         else:
             line_bot_api.reply_message(
                 event.reply_token,
@@ -132,12 +109,13 @@ def handle_message(event):
             )
         return
 
-    # 認証後でも無関係なメッセージ
+    # その他のメッセージ
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text="通貨ペアを選んでください：", quick_reply=currency_quick_reply)
     )
 
+# アプリ実行
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
