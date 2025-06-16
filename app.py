@@ -6,6 +6,7 @@ import string
 import base64
 import requests
 from flask import Flask, request
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -20,7 +21,6 @@ def generate_password():
     return "mem" + ''.join(random.choices(string.digits, k=4))
 
 # 有効期限の設定（1ヶ月）
-from datetime import datetime, timedelta
 def get_expiration_date():
     return (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 
@@ -70,8 +70,17 @@ def issue_password():
     passwords.append(new_entry)
 
     if update_passwords(passwords):
-        return f"""✅ あなたのパスワード: {new_pass}
-📅 このパスワードは1ヶ月間有効・1回限り使用可能です。"""
+        return f"""
+        <html>
+            <body style="text-align:center; padding-top:50px;">
+                <div style="font-size: 36px; font-weight: bold;">✅ あなたのパスワード:</div>
+                <div style="font-size: 72px; font-weight: bold; color: #007BFF;">{new_pass}</div>
+                <div style="font-size: 24px; margin-top:20px;">
+                    📅 このパスワードは1ヶ月間有効・何度でも使用可能です。
+                </div>
+            </body>
+        </html>
+        """
     else:
         return "❌ GitHubへの保存に失敗しました。"
 
