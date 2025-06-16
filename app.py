@@ -66,5 +66,5 @@ def issue_password():
     return render_template_string(HTML_FORM, password=password)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))  # ここを 5000→10000 に
     app.run(host="0.0.0.0", port=port)
