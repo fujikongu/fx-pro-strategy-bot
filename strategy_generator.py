@@ -1,11 +1,12 @@
 import os
 import requests
 import datetime
+import openai
 
+# TwelveData 為替API
 def fetch_forex_rate(symbol):
     api_key = os.getenv("TWELVE_API_KEY")
 
-    # TwelveDataの正しい通貨ペア形式に変換
     pair_map = {
         "USDJPY": "USD/JPY",
         "EURUSD": "EUR/USD",
@@ -27,26 +28,49 @@ def fetch_forex_rate(symbol):
     except:
         return None
 
+# ChatGPT戦略コメント生成
+def generate_chatgpt_comment(symbol, rate):
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    prompt = f"""
+以下はFXの上級トレーダー向け分析コメントを生成するタスクです。
+
+条件:
+- 通貨ペア: {symbol}
+- 日付: {today}
+- 現在レート: {rate}
+
+内容:
+- トレンドの方向性（上昇・下降・レンジ）
+- 買いまたは売り戦略の根拠
+- 損切りと利確のポイント案
+- テクニカル指標に基づいた戦略提案（RSI, MA, フィボナッチ等）
+- 明確で論理的な戦略アドバイス（200文字以内）
+
+出力形式：
+「■戦略コメント：」から始めて、トレーダー向けコメントを出力。
+"""
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+    )
+
+    return response.choices[0].message["content"].strip()
+
+# 総合戦略を生成
 def generate_strategy(symbol):
     rate = fetch_forex_rate(symbol)
     if rate is None:
         return f"❌ {symbol} の為替データを取得できませんでした。"
 
-    # ロジック例（ダミー）
-    direction = "押し目買い" if rate % 2 > 1 else "戻り売り"
-    stop_loss = "直近安値下抜け" if direction == "押し目買い" else "直近高値上抜け"
-    profit_point = "フィボナッチ 38.2%" if direction == "押し目買い" else "フィボナッチ 61.8%"
-    comment = "トレンドに沿った順張り戦略が有効です。リスク管理も徹底しましょう。"
-
     today = datetime.datetime.now().strftime("%Y-%m-%d")
+    comment = generate_chatgpt_comment(symbol, rate)
 
     return f"""📅 日付: {today}
 ■現在レート: {rate:.3f}
 
-■戦略提案：
-- トレンド方向: {direction}
-- 損切りライン: {stop_loss}
-- 利確ポイント: {profit_point}
-
-■AIコメント：
-{comment}"""
+{comment}
+"""
