@@ -29,13 +29,20 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 # ユーザーステートを保持
 user_state = {}
 
-# クイックリプライの定義
+# クイックリプライの定義（通貨ペア選択）
 currency_quick_reply = QuickReply(items=[
     QuickReplyButton(action=MessageAction(label="USDJPY", text="USDJPY")),
     QuickReplyButton(action=MessageAction(label="EURUSD", text="EURUSD")),
     QuickReplyButton(action=MessageAction(label="GBPJPY", text="GBPJPY")),
     QuickReplyButton(action=MessageAction(label="AUDJPY", text="AUDJPY")),
     QuickReplyButton(action=MessageAction(label="EURJPY", text="EURJPY")),
+])
+
+# クイックリプライ（戦略タイプ選択）
+strategy_quick_reply = QuickReply(items=[
+    QuickReplyButton(action=MessageAction(label="短期", text="短期")),
+    QuickReplyButton(action=MessageAction(label="中期", text="中期")),
+    QuickReplyButton(action=MessageAction(label="長期", text="長期")),
 ])
 
 # GitHubからpasswords.jsonを読み込む
@@ -72,7 +79,7 @@ def handle_message(event):
     message_text = event.message.text.strip()
     passwords = load_passwords()
 
-    # 認証未完了ユーザー
+    # 認証未完了
     if user_id not in user_state:
         for pw in passwords:
             if pw["password"] == message_text:
@@ -95,17 +102,36 @@ def handle_message(event):
         )
         return
 
-    # 認証後：通貨ペア入力待ち
+    # 通貨ペア入力待ち
     if user_state.get(user_id, {}).get("step") == "await_currency_pair":
         if message_text in ["USDJPY", "EURUSD", "GBPJPY", "AUDJPY", "EURJPY"]:
-            strategy = generate_strategy(message_text)
-            reply = TextSendMessage(text=f"📊 {message_text}の戦略\n\n{strategy}")
-            line_bot_api.reply_message(event.reply_token, reply)
-            user_state.pop(user_id, None)
+            user_state[user_id]["pair"] = message_text
+            user_state[user_id]["step"] = "await_strategy_type"
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="分析したい戦略のタイプを選んでください：", quick_reply=strategy_quick_reply)
+            )
         else:
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(text="⚠️ 有効な通貨ペアを選択してください。", quick_reply=currency_quick_reply)
+            )
+        return
+
+    # 戦略タイプ選択待ち
+    if user_state.get(user_id, {}).get("step") == "await_strategy_type":
+        if message_text in ["短期", "中期", "長期"]:
+            pair = user_state[user_id]["pair"]
+            strategy = generate_strategy(pair, message_text)
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=f"📊 {pair} の{message_text}戦略\n\n{strategy}")
+            )
+            user_state.pop(user_id, None)
+        else:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="⚠️ 短期・中期・長期のいずれかを選んでください。", quick_reply=strategy_quick_reply)
             )
         return
 
