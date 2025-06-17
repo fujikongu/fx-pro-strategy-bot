@@ -1,42 +1,52 @@
 import os
 import requests
-import openai
-
+import datetime
 
 def fetch_forex_rate(symbol):
-    """
-    TwelveData APIを使用して指定された通貨ペアのリアルタイム為替レートを取得
-    """
     api_key = os.getenv("TWELVE_API_KEY")
-    url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={api_key}"
-    res = requests.get(url)
-    data = res.json()
-    return float(data["price"]) if "price" in data else None
 
+    # TwelveDataの正しい通貨ペア形式に変換
+    pair_map = {
+        "USDJPY": "USD/JPY",
+        "EURUSD": "EUR/USD",
+        "GBPJPY": "GBP/JPY",
+        "AUDJPY": "AUD/JPY",
+        "EURJPY": "EUR/JPY"
+    }
+
+    if symbol not in pair_map:
+        return None
+
+    formatted = pair_map[symbol]
+    url = f"https://api.twelvedata.com/price?symbol={formatted}&apikey={api_key}"
+    res = requests.get(url)
+
+    try:
+        data = res.json()
+        return float(data["price"]) if "price" in data else None
+    except:
+        return None
 
 def generate_strategy(symbol):
-    """
-    為替レートを取得し、それに基づいた戦略をChatGPTで生成
-    """
-    price = fetch_forex_rate(symbol)
-    if not price:
+    rate = fetch_forex_rate(symbol)
+    if rate is None:
         return f"❌ {symbol} の為替データを取得できませんでした。"
 
-    prompt = f"""
-現在の為替レート {symbol} = {price} に基づいて、以下の形式でFX戦略を作成してください：
+    # ロジック例（ダミー）
+    direction = "押し目買い" if rate % 2 > 1 else "戻り売り"
+    stop_loss = "直近安値下抜け" if direction == "押し目買い" else "直近高値上抜け"
+    profit_point = "フィボナッチ 38.2%" if direction == "押し目買い" else "フィボナッチ 61.8%"
+    comment = "トレンドに沿った順張り戦略が有効です。リスク管理も徹底しましょう。"
 
-■現状分析：
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    return f"""📅 日付: {today}
+■現在レート: {rate:.3f}
+
 ■戦略提案：
-- トレンド方向：
-- 損切りライン：
-- 利確ポイント：
+- トレンド方向: {direction}
+- 損切りライン: {stop_loss}
+- 利確ポイント: {profit_point}
 
 ■AIコメント：
-    """.strip()
-
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response.choices[0].message.content.strip()
+{comment}"""
