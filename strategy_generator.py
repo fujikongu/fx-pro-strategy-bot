@@ -3,7 +3,7 @@ import requests
 import datetime
 import openai
 
-# TwelveData 為替API
+# 為替レートをTwelveDataから取得
 def fetch_forex_rate(symbol):
     api_key = os.getenv("TWELVE_API_KEY")
 
@@ -28,11 +28,11 @@ def fetch_forex_rate(symbol):
     except:
         return None
 
-# ChatGPT戦略コメント生成
-def generate_chatgpt_comment(symbol, rate):
+# ChatGPTを使って戦略コメントを生成（期間も考慮）
+def generate_chatgpt_comment(symbol, rate, term):
     openai.api_key = os.getenv("OPENAI_API_KEY")
-
     today = datetime.datetime.now().strftime("%Y-%m-%d")
+
     prompt = f"""
 以下はFXの上級トレーダー向け分析コメントを生成するタスクです。
 
@@ -40,8 +40,10 @@ def generate_chatgpt_comment(symbol, rate):
 - 通貨ペア: {symbol}
 - 日付: {today}
 - 現在レート: {rate}
+- トレード期間: {term}
 
 内容:
+- トレード期間（{term}）に合わせた戦略分析
 - トレンドの方向性（上昇・下降・レンジ）
 - 買いまたは売り戦略の根拠
 - 損切りと利確のポイント案
@@ -60,17 +62,18 @@ def generate_chatgpt_comment(symbol, rate):
 
     return response.choices[0].message["content"].strip()
 
-# 総合戦略を生成
-def generate_strategy(symbol):
+# 全体戦略を生成する関数（通貨ペア＋期間）
+def generate_strategy(symbol, term="中期"):
     rate = fetch_forex_rate(symbol)
     if rate is None:
         return f"❌ {symbol} の為替データを取得できませんでした。"
 
     today = datetime.datetime.now().strftime("%Y-%m-%d")
-    comment = generate_chatgpt_comment(symbol, rate)
+    comment = generate_chatgpt_comment(symbol, rate, term)
 
     return f"""📅 日付: {today}
 ■現在レート: {rate:.3f}
+■トレード期間: {term}
 
 {comment}
 """
