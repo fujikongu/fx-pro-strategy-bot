@@ -28,32 +28,7 @@ def fetch_forex_rate(symbol):
     except:
         return None
 
-# ChatGPTを使って順張り／逆張り判定コメントを生成
-def determine_trading_type(symbol, rate, term):
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-
-    prompt = f"""
-以下の条件に基づき、現在の為替相場における戦略として「順張り」または「逆張り」のどちらを採用すべきか判断し、簡潔にコメントしてください。
-
-条件:
-- 通貨ペア: {symbol}
-- レート: {rate}
-- トレード期間: {term}
-- 指標は仮定で構いません（例：RSIやMA、トレンド方向等）
-
-出力形式（50文字以内）：
-「■AI戦略タイプ判定：…」から始めて1文で。
-"""
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.5,
-    )
-    return response.choices[0].message["content"].strip()
-
-# ChatGPTで戦略コメントを生成（トレード期間考慮）
+# ChatGPTで戦略コメントを生成
 def generate_chatgpt_comment(symbol, rate, term):
     openai.api_key = os.getenv("OPENAI_API_KEY")
     today = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -83,6 +58,32 @@ def generate_chatgpt_comment(symbol, rate, term):
         model="gpt-4",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
+    )
+
+    return response.choices[0].message["content"].strip()
+
+# 順張り/逆張りのAI判定コメント生成
+def determine_trading_type(symbol, rate, term):
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+
+    prompt = f"""
+以下の条件に基づき、現在の為替相場における戦略として「順張り」または「逆張り」のどちらを採用すべきか判断し、簡潔にコメントしてください。
+
+条件:
+- 通貨ペア: {symbol}
+- レート: {rate}
+- トレード期間: {term}
+- 指標は仮定で構いません（例：RSIやMA、トレンド方向等）
+
+出力形式（50文字以内）：
+「■AI戦略タイプ判定：…」から始めて1文で。
+"""
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5,
     )
 
     return response.choices[0].message["content"].strip()
